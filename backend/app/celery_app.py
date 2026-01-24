@@ -2,8 +2,8 @@ from celery import Celery
 
 celery_app = Celery(
     "infra_health",
-    broker="mongodb://localhost:27017/infra_health",
-    backend="mongodb://localhost:27017/infra_health",
+    broker="mongodb://mongo:27017/infra_health",
+    backend="mongodb://mongo:27017/infra_health",
 )
 
 celery_app.conf.update(

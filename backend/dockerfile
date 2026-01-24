@@ -1,0 +1,35 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+
+# FROM python:3.11-slim
+# → lightweight Python image
+
+# WORKDIR /app
+# → inside container, work here
+
+# COPY requirements.txt .
+# → copy dependencies list
+
+# RUN pip install ...
+# → install dependencies inside container
+
+# COPY app ./app
+# → copy your FastAPI code
+
+# EXPOSE 8000
+# → tell Docker this app listens on 8000
+
+# CMD [...]
+# → start FastAPI when container runs

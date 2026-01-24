@@ -1,15 +1,23 @@
 from fastapi import FastAPI, HTTPException
-from pymongo import MongoClient
+from pymongo import DESCENDING, MongoClient
 from datetime import datetime, timezone
 from app.tasks import run_health_check
 from bson import ObjectId, objectid
+from fastapi.middleware.cors import CORSMiddleware
 
-
-client = MongoClient("mongodb://localhost:27017/")
-db = client["infra_health"]
-jobs = db["jobs"]  # this is a mongo collection
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+client = MongoClient("mongodb://mongo:27017")
+db = client["infra_health"]
+jobs = db["jobs"]  # this is a mongo collection
 
 
 @app.get("/health")
@@ -53,3 +61,22 @@ def get_job(job_id: str):
         "created_at": job["created_at"],
         "completed_at": job.get("completed_at"),
     }
+
+
+@app.get("/jobs")
+def get_all_jobs(app_id: str):
+    jobs_cursor = jobs.find({"application_id": app_id}).sort(
+        "created_at", direction=DESCENDING
+    )
+    result = []
+    for job in jobs_cursor:
+        result.append(
+            {
+                "job_id": str(job["_id"]),
+                "application_id": job["application_id"],
+                "status": job["status"],
+                "created_at": job["created_at"],
+                "completed_at": job.get("completed_at"),
+            }
+        )
+    return result

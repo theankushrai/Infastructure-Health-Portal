@@ -5,7 +5,7 @@ from app.celery_app import celery_app
 from pymongo import MongoClient
 from datetime import datetime, timezone
 
-client = MongoClient("mongodb://localhost:27017")
+client = MongoClient("mongodb://mongo:27017")
 db = client["infra_health"]
 jobs = db["jobs"]
 
