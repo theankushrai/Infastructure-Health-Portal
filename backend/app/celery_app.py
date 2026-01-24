@@ -1,9 +1,12 @@
+import os
 from celery import Celery
+
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
 
 celery_app = Celery(
     "infra_health",
-    broker="mongodb://mongo:27017/infra_health",
-    backend="mongodb://mongo:27017/infra_health",
+    broker=f"{MONGO_URL}/infra_health",
+    backend=f"{MONGO_URL}/infra_health",
 )
 
 celery_app.conf.update(
@@ -11,5 +14,5 @@ celery_app.conf.update(
     result_serializer="json",
     accept_content=["json"],
 )
-
-celery_app.autodiscover_tasks(["app"])
+# autodiscover tasks
+celery_app.autodiscover_tasks(["app.tasks"])

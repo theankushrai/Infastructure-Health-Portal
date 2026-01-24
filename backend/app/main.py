@@ -4,18 +4,22 @@ from datetime import datetime, timezone
 from app.tasks import run_health_check
 from bson import ObjectId, objectid
 from fastapi.middleware.cors import CORSMiddleware
-
+import os
 
 app = FastAPI()
+cors_origins = os.getenv("CORS_ORIGINS", "")
+origins = [origin.strip() for origin in cors_origins.split(",") if origin]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-client = MongoClient("mongodb://mongo:27017")
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
+client = MongoClient(MONGO_URL)
 db = client["infra_health"]
 jobs = db["jobs"]  # this is a mongo collection
 

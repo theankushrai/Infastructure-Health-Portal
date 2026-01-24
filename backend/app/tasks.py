@@ -4,8 +4,10 @@ from bson import ObjectId
 from app.celery_app import celery_app
 from pymongo import MongoClient
 from datetime import datetime, timezone
+import os
 
-client = MongoClient("mongodb://mongo:27017")
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
+client = MongoClient(MONGO_URL)
 db = client["infra_health"]
 jobs = db["jobs"]
 
