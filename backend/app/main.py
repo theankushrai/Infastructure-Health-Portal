@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 
 app = FastAPI()
-cors_origins = os.getenv("CORS_ORIGINS", "")
+cors_origins = os.getenv("CORS_ORIGINS")
 origins = [origin.strip() for origin in cors_origins.split(",") if origin]
 
 app.add_middleware(
@@ -24,6 +24,7 @@ db = client["infra_health"]
 jobs = db["jobs"]  # this is a mongo collection
 
 router = APIRouter(prefix="/api")
+
 
 @router.get("/health")
 def get_health():
@@ -85,6 +86,7 @@ def get_all_jobs(app_id: str):
             }
         )
     return result
+
 
 # 👇 INCLUDE ROUTER AT THE VERY END
 app.include_router(router)

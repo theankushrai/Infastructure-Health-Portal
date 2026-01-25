@@ -1,4 +1,14 @@
-<!-- services:
+# Docker Compose Healthchecks
+
+Love this question — **healthchecks are one of those “senior-level” Docker things** that silently save you from chaos later 😄
+Let’s go **line by line**, and I’ll also explain **why this matters in real systems** (backend → Mongo dependency).
+
+---
+
+## 🧪 Healthcheck Configuration Example
+
+```yaml
+services:
   mongo:
     image: mongo:6
     container_name: infra-health-mongo
@@ -8,21 +18,7 @@
       test: ["CMD", "mongosh", "--eval", "db.runCommand('ping').ok"]
       interval: 5s
       timeout: 5s
-      retries: 5 -->
-
-Love this question — **healthchecks are one of those “senior-level” Docker things** that silently save you from chaos later 😄
-Let’s go **line by line**, and I’ll also explain **why this matters in real systems** (backend → Mongo dependency).
-
----
-
-## 🧪 The Healthcheck Block
-
-```yaml
-healthcheck:
-  test: ["CMD", "mongosh", "--eval", "db.runCommand('ping').ok"]
-  interval: 5s
-  timeout: 5s
-  retries: 5
+      retries: 5
 ```
 
 Think of this as Docker asking MongoDB:

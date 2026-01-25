@@ -18,7 +18,32 @@ fastapi dev app/main.py
 docker run -d --name mongo -p 27017:27017 mongo
 ```
 
-build backend image = docker build -t infra-health-backend .
-run backend image = docker run -p 8000:8000 infra-health-backend
-docker compose with rebuild - docker-compose up --build
-docker compose down - docker-compose down
+## Docker Commands
+
+### Build Backend Image
+
+```bash
+docker build -t infra-health-backend .
+```
+
+### Run Backend Container
+
+```bash
+docker run -p 8000:8000 infra-health-backend
+```
+
+### Docker Compose
+
+```bash
+# Start with rebuild
+docker-compose up --build
+
+# Stop all services
+docker-compose down
+```
+
+### Build Frontend for Kubernetes
+
+```bash
+docker build --build-arg VITE_API_BASE_URL=http://infra-health.local/api -t infra-health-frontend:k8s ./frontend
+```
