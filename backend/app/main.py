@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, APIRouter
 from pymongo import DESCENDING, MongoClient
 from datetime import datetime, timezone
 from app.tasks import run_health_check
@@ -23,13 +23,14 @@ client = MongoClient(MONGO_URL)
 db = client["infra_health"]
 jobs = db["jobs"]  # this is a mongo collection
 
+router = APIRouter(prefix="/api")
 
-@app.get("/health")
+@router.get("/health")
 def get_health():
     return {"status": "ok"}
 
 
-@app.post("/jobs")
+@router.post("/jobs")
 def create_job(app_id: str):
     job = {
         "application_id": app_id,
@@ -46,7 +47,7 @@ def create_job(app_id: str):
     return {"job_id": job_id, "message": "Health check started"}
 
 
-@app.get("/jobs/{job_id}")
+@router.get("/jobs/{job_id}")
 def get_job(job_id: str):
     try:
         oid = ObjectId(job_id)
@@ -67,7 +68,7 @@ def get_job(job_id: str):
     }
 
 
-@app.get("/jobs")
+@router.get("/jobs")
 def get_all_jobs(app_id: str):
     jobs_cursor = jobs.find({"application_id": app_id}).sort(
         "created_at", direction=DESCENDING
@@ -84,3 +85,6 @@ def get_all_jobs(app_id: str):
             }
         )
     return result
+
+# 👇 INCLUDE ROUTER AT THE VERY END
+app.include_router(router)
