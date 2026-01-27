@@ -24,14 +24,17 @@ echo "🚀 Starting Jenkins with persistence..."
 # Build Jenkins image
 docker build -t "$JENKINS_IMAGE" jenkins >/dev/null
 
-# Detect Docker socket (Linux vs Windows)
+# -------------------------------
+# Docker socket mapping (CRITICAL)
+# -------------------------------
 if [[ "$(uname)" == "Linux" ]]; then
-  DOCKER_SOCKET="/var/run/docker.sock"
+  DOCKER_MOUNT="/var/run/docker.sock:/var/run/docker.sock"
 else
-  DOCKER_SOCKET="//./pipe/docker_engine"
+  # Windows (Docker Desktop + Git Bash)
+  DOCKER_MOUNT="//./pipe/docker_engine:/var/run/docker.sock"
 fi
 
-echo "🔌 Using Docker socket: $DOCKER_SOCKET"
+echo "🔌 Docker socket mount: $DOCKER_MOUNT"
 
 # Remove existing container if present
 docker rm -f "$JENKINS_CONTAINER" >/dev/null 2>&1 || true
@@ -41,7 +44,7 @@ docker run -d \
   --name "$JENKINS_CONTAINER" \
   -p "$JENKINS_PORT:8080" \
   -v "$JENKINS_VOLUME:/var/jenkins_home" \
-  -v "$DOCKER_SOCKET:$DOCKER_SOCKET" \
+  -v "$DOCKER_MOUNT" \
   -v "$HOME/.kube:/var/jenkins_home/.kube" \
   "$JENKINS_IMAGE" >/dev/null
 
@@ -50,7 +53,7 @@ echo "🌐 Jenkins is starting..."
 echo "👉 Open Jenkins UI: http://localhost:$JENKINS_PORT"
 echo ""
 echo "ℹ️ If this is the first run, Jenkins will show the Unlock screen."
-echo "ℹ️ Password is printed in Jenkins logs (one-time only)."
+echo "ℹ️ Initial password appears once in Jenkins logs."
 echo ""
 echo "👉 Press 'q' to stop Jenkins"
 
