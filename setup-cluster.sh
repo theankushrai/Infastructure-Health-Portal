@@ -12,13 +12,11 @@ CONTROL_PLANE_NAME="${CLUSTER_NAME}-control-plane"
 setup_hosts() {
     echo "🌐 Checking /etc/hosts for $DOMAIN and cluster alias..."
     
-    # Add Application Domain
     if ! grep -q "$DOMAIN" /etc/hosts; then
         echo "📝 Adding $DOMAIN to /etc/hosts (requires sudo)..."
         echo "127.0.0.1 $DOMAIN" | sudo tee -a /etc/hosts
     fi
 
-    # NEW: Add Control Plane Alias so local terminal works with the "Pro Way"
     if ! grep -q "$CONTROL_PLANE_NAME" /etc/hosts; then
         echo "📝 Adding $CONTROL_PLANE_NAME to /etc/hosts..."
         echo "127.0.0.1 $CONTROL_PLANE_NAME" | sudo tee -a /etc/hosts
@@ -86,22 +84,28 @@ EOF
     elif [ "$(docker inspect -f '{{.State.Running}}' ${CONTROL_PLANE_NAME} 2>/dev/null)" == "false" ]; then
         echo "🛌 Cluster is present but STOPPED. Starting nodes..."
         docker start "${CONTROL_PLANE_NAME}"
-        until kubectl cluster-info >/dev/null 2>&1; do
-            echo "⏳ Waiting for API Server..."
-            sleep 2
-        done
     else
-        echo "✅ Cluster is already UP and RUNNING;"
+        echo "✅ Cluster is already present;"
     fi
 
-    echo "🛠️ Patching Kubeconfig for Jenkins & Local Terminal..."
-    # Point server to the container name instead of 127.0.0.1;
-    sed -i "s/server: https:\/\/127.0.0.1:[0-9]*/server: https:\/\/${CONTROL_PLANE_NAME}:6443/g" ~/.kube/config
+    echo "🛠️ Detecting Kind API Port and patching Kubeconfig..."
     
-    # NEW: Disable TLS verification globally for this cluster context so we don't need --insecure-skip-tls-verify every time locally;
+    # Dynamically detect the port Docker assigned to Kind's API
+    KIND_PORT=$(docker inspect --format='{{(index (index .NetworkSettings.Ports "6443/tcp") 0).HostPort}}' "${CONTROL_PLANE_NAME}")
+    echo "🔍 Detected Kind is running on Host Port: $KIND_PORT"
+
+    # Patch config with detected port and container name alias;
+    sed -i "s/server: https:\/\/127.0.0.1:[0-9]*/server: https:\/\/${CONTROL_PLANE_NAME}:${KIND_PORT}/g" ~/.kube/config
+    
+    # Disable TLS verification for this context;
     kubectl config set-cluster "kind-${CLUSTER_NAME}" --insecure-skip-tls-verify=true
     
-    echo "✅ Kubeconfig tuned for container networking;"
+    echo "⏳ Waiting for API Server to respond at https://${CONTROL_PLANE_NAME}:${KIND_PORT}..."
+    until kubectl cluster-info --insecure-skip-tls-verify >/dev/null 2>&1; do
+        echo "⏳ API Server is still starting... (checking port $KIND_PORT)"
+        sleep 3
+    done
+    echo "🚀 API Server is ONLINE;"
 }
 
 # --- EXECUTE STARTUP SEQUENCE ---
@@ -111,31 +115,35 @@ manage_cluster
 
 # --- 4. PREPARE NAMESPACE ---
 echo "📂 Preparing Namespace..."
-kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+kubectl --insecure-skip-tls-verify create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl --insecure-skip-tls-verify apply -f -
 kubectl config set-context --current --namespace="$NAMESPACE"
 
-# --- 5. BUILD & PIPE IMAGES ---
-echo "📦 Building images and loading to Kind..."
+# --- 5. BUILD & PIPE IMAGES (DIRECT STREAMING) ---
+echo "📦 Building images and streaming to Kind (Pro Method)..."
 
+# Build and stream Backend
 docker build --no-cache -t infra-health-backend:latest ./backend
-kind load docker-image infra-health-backend:latest --name "$CLUSTER_NAME"
+docker save infra-health-backend:latest | docker exec -i "${CONTROL_PLANE_NAME}" ctr -n k8s.io images import -
 
+# Build and stream Frontend
 docker build --no-cache -t infra-health-frontend:latest ./frontend
-kind load docker-image infra-health-frontend:latest --name "$CLUSTER_NAME"
+docker save infra-health-frontend:latest | docker exec -i "${CONTROL_PLANE_NAME}" ctr -n k8s.io images import -
+
+echo "✅ Images loaded successfully via direct stream;"
 
 # --- 6. INGRESS CONTROLLER SETUP ---
 echo "🌐 Ensuring NGINX Ingress Controller is installed..."
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+kubectl --insecure-skip-tls-verify apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
 
 echo "⏳ Waiting for Ingress Controller (This takes ~1-2 mins)..."
-kubectl wait --namespace ingress-nginx \
+kubectl --insecure-skip-tls-verify wait --namespace ingress-nginx \
   --for=condition=ready pod \
   --selector=app.kubernetes.io/component=controller \
   --timeout=300s
 
 # --- 7. APPLY APP MANIFESTS ---
 echo "🚀 Applying K8s Manifests..."
-kubectl apply -f k8s/ -R 
+kubectl --insecure-skip-tls-verify apply -f k8s/ -R 
 
 echo ""
 echo "✨ ALL SYSTEMS GO!"
