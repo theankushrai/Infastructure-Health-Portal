@@ -11,10 +11,10 @@ pipeline {
       steps {
         sh '''
           echo "Building backend image"
-          docker build --no-cache -t infra-health-backend:latest backend
+          docker build --no-cache -t infra-health-backend:latest ./backend
 
           echo "Building frontend image"
-          docker build --no-cache -t infra-health-frontend:latest frontend
+          docker build --no-cache -t infra-health-frontend:latest ./frontend
         '''
       }
     }
