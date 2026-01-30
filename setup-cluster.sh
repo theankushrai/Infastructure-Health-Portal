@@ -6,16 +6,24 @@ set -e
 CLUSTER_NAME="infra-health"
 NAMESPACE="infra-health"
 DOMAIN="infra-health.local"
+CONTROL_PLANE_NAME="${CLUSTER_NAME}-control-plane"
 
 # --- 1. HOSTS FILE INJECTION ---
 setup_hosts() {
-    echo "🌐 Checking /etc/hosts for $DOMAIN..."
-    if grep -q "$DOMAIN" /etc/hosts; then
-        echo "✅ Host entry already exists;"
-    else
+    echo "🌐 Checking /etc/hosts for $DOMAIN and cluster alias..."
+    
+    # Add Application Domain
+    if ! grep -q "$DOMAIN" /etc/hosts; then
         echo "📝 Adding $DOMAIN to /etc/hosts (requires sudo)..."
         echo "127.0.0.1 $DOMAIN" | sudo tee -a /etc/hosts
     fi
+
+    # NEW: Add Control Plane Alias so local terminal works with the "Pro Way"
+    if ! grep -q "$CONTROL_PLANE_NAME" /etc/hosts; then
+        echo "📝 Adding $CONTROL_PLANE_NAME to /etc/hosts..."
+        echo "127.0.0.1 $CONTROL_PLANE_NAME" | sudo tee -a /etc/hosts
+    fi
+    echo "✅ Host entries verified;"
 }
 
 # --- 2. DEPENDENCY CHECK & INSTALL ---
@@ -48,7 +56,6 @@ install_dependencies() {
 manage_cluster() {
     echo "🚀 Managing Cluster: $CLUSTER_NAME..."
     
-    # Check if Docker service is running (Essential for WSL)
     if ! docker info >/dev/null 2>&1; then
         echo "🐳 Docker service is down. Starting Docker..."
         sudo service docker start
@@ -76,9 +83,9 @@ nodes:
     hostPort: 443
     protocol: TCP
 EOF
-    elif [ "$(docker inspect -f '{{.State.Running}}' ${CLUSTER_NAME}-control-plane 2>/dev/null)" == "false" ]; then
+    elif [ "$(docker inspect -f '{{.State.Running}}' ${CONTROL_PLANE_NAME} 2>/dev/null)" == "false" ]; then
         echo "🛌 Cluster is present but STOPPED. Starting nodes..."
-        docker start "${CLUSTER_NAME}-control-plane"
+        docker start "${CONTROL_PLANE_NAME}"
         until kubectl cluster-info >/dev/null 2>&1; do
             echo "⏳ Waiting for API Server..."
             sleep 2
@@ -86,6 +93,15 @@ EOF
     else
         echo "✅ Cluster is already UP and RUNNING;"
     fi
+
+    echo "🛠️ Patching Kubeconfig for Jenkins & Local Terminal..."
+    # Point server to the container name instead of 127.0.0.1;
+    sed -i "s/server: https:\/\/127.0.0.1:[0-9]*/server: https:\/\/${CONTROL_PLANE_NAME}:6443/g" ~/.kube/config
+    
+    # NEW: Disable TLS verification globally for this cluster context so we don't need --insecure-skip-tls-verify every time locally;
+    kubectl config set-cluster "kind-${CLUSTER_NAME}" --insecure-skip-tls-verify=true
+    
+    echo "✅ Kubeconfig tuned for container networking;"
 }
 
 # --- EXECUTE STARTUP SEQUENCE ---
@@ -99,19 +115,19 @@ kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -
 kubectl config set-context --current --namespace="$NAMESPACE"
 
 # --- 5. BUILD & PIPE IMAGES ---
-echo "📦 Building images and loading to Kind (Direct Pipe)..."
+echo "📦 Building images and loading to Kind..."
 
 docker build --no-cache -t infra-health-backend:latest ./backend
-docker save infra-health-backend:latest | docker exec -i "${CLUSTER_NAME}-control-plane" ctr -n k8s.io images import -
+kind load docker-image infra-health-backend:latest --name "$CLUSTER_NAME"
 
 docker build --no-cache -t infra-health-frontend:latest ./frontend
-docker save infra-health-frontend:latest | docker exec -i "${CLUSTER_NAME}-control-plane" ctr -n k8s.io images import -
+kind load docker-image infra-health-frontend:latest --name "$CLUSTER_NAME"
 
 # --- 6. INGRESS CONTROLLER SETUP ---
 echo "🌐 Ensuring NGINX Ingress Controller is installed..."
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
 
-echo "⏳ Waiting for Ingress Controller to be ready (Timeout: 5m)..."
+echo "⏳ Waiting for Ingress Controller (This takes ~1-2 mins)..."
 kubectl wait --namespace ingress-nginx \
   --for=condition=ready pod \
   --selector=app.kubernetes.io/component=controller \
@@ -119,12 +135,9 @@ kubectl wait --namespace ingress-nginx \
 
 # --- 7. APPLY APP MANIFESTS ---
 echo "🚀 Applying K8s Manifests..."
-kubectl apply -f k8s/mongo/
-kubectl apply -f k8s/backend/
-kubectl apply -f k8s/worker/
-kubectl apply -f k8s/frontend/
-kubectl apply -f k8s/ingress/
+kubectl apply -f k8s/ -R 
 
 echo ""
 echo "✨ ALL SYSTEMS GO!"
 echo "🔗 URL: http://$DOMAIN"
+echo "🔧 Jenkins (if running): http://localhost:8081"

@@ -4,7 +4,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                // We removed skipDefaultCheckout, so this ensures code is present;
+                // Pulls the latest code from your repo;
                 checkout scm;
             }
         }
@@ -25,6 +25,7 @@ pipeline {
             steps {
                 sh '''
                     echo "Loading images into kind cluster: infra-health"
+                    # This moves images from Docker into the Kind nodes;
                     kind load docker-image infra-health-backend:latest --name infra-health
                     kind load docker-image infra-health-frontend:latest --name infra-health
                 '''
@@ -35,11 +36,10 @@ pipeline {
             steps {
                 sh '''
                     echo "Applying Kubernetes manifests..."
-                    # Ensure the namespace and deployments exist first;
-                    kubectl --insecure-skip-tls-verify apply -f k8s/ -R
+                    # Added '-n infra-health' to ensure it hits the right namespace;
+                    kubectl --insecure-skip-tls-verify apply -f k8s/ -R -n infra-health
                     
-                    echo "Restarting Kubernetes deployments to pull new images..."
-                    # Using --insecure-skip-tls-verify to handle the container-name mismatch;
+                    echo "Restarting deployments to pick up the new images..."
                     kubectl --insecure-skip-tls-verify rollout restart deployment/backend -n infra-health
                     kubectl --insecure-skip-tls-verify rollout restart deployment/worker -n infra-health
                     kubectl --insecure-skip-tls-verify rollout restart deployment/frontend -n infra-health
