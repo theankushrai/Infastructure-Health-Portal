@@ -7,6 +7,7 @@ JENKINS_CONTAINER="infra-health-jenkins"
 JENKINS_IMAGE="infra-health-jenkins"
 JENKINS_VOLUME="infra-health-jenkins-data"
 JENKINS_PORT=8081
+CLUSTER_NAME="infra-health"
 
 # Get the directory where the script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,15 +16,15 @@ JENKINS_DOCKERFILE_DIR="$SCRIPT_DIR/Jenkins"
 # --- 1. CLUSTER CHECK ---
 echo "🔍 Checking Kubernetes cluster status..."
 
-if ! kind get clusters | grep -q "infra-health"; then
-    echo "❌ Cluster 'infra-health' not found;"
+if ! kind get clusters | grep -q "$CLUSTER_NAME"; then
+    echo "❌ Cluster '$CLUSTER_NAME' not found;"
     echo "👉 Please run './setup-cluster.sh' first;"
     exit 1
 fi
 
 if ! kubectl cluster-info >/dev/null 2>&1; then
-    echo "⚠️  Cluster not responding. Attempting restart..."
-    docker start infra-health-control-plane >/dev/null 2>&1 || true
+    echo "⚠️ Cluster not responding. Attempting restart..."
+    docker start "${CLUSTER_NAME}-control-plane" >/dev/null 2>&1 || true
     sleep 2
 fi
 
@@ -58,12 +59,19 @@ docker run -d \
   -v "$DOCKER_MOUNT" \
   "$JENKINS_IMAGE" >/dev/null
 
-# --- 3. INJECT KUBECONFIG ---
+# --- 3. NETWORK BRIDGE (THE FIX) ---
+echo "🔗 Connecting Jenkins to the Kind network bridge..."
+# This allows Jenkins to 'see' the 172.18.x.x IP range of the cluster;
+docker network connect kind "$JENKINS_CONTAINER" 2>/dev/null || true
+
+# --- 4. INJECT KUBECONFIG ---
 echo "🔑 Syncing Kubeconfig..."
 docker exec -u root "$JENKINS_CONTAINER" mkdir -p /var/jenkins_home/.kube
 docker cp "$HOME/.kube/config" "$JENKINS_CONTAINER:/var/jenkins_home/.kube/config"
 docker exec -u root "$JENKINS_CONTAINER" chown -R jenkins:jenkins /var/jenkins_home/.kube
-echo "✅ Credentials ready;"
+echo "✅ Credentials and Bridge ready;"
+
+
 
 echo "----------------------------------------------------------"
 echo "🌐 Jenkins UI: http://localhost:$JENKINS_PORT"
