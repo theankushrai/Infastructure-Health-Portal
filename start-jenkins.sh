@@ -39,13 +39,15 @@ echo "🔌 Docker socket mount: $DOCKER_MOUNT"
 # Remove existing container if present
 docker rm -f "$JENKINS_CONTAINER" >/dev/null 2>&1 || true
 
-# Run Jenkins
+DOCKER_ENV="-e DOCKER_HOST=tcp://host.docker.internal:2375"
+
 docker run -d \
   --name "$JENKINS_CONTAINER" \
+  --user root \
   -p "$JENKINS_PORT:8080" \
   -v "$JENKINS_VOLUME:/var/jenkins_home" \
-  -v "$DOCKER_MOUNT" \
   -v "$HOME/.kube:/var/jenkins_home/.kube" \
+  $DOCKER_ENV \
   "$JENKINS_IMAGE" >/dev/null
 
 echo ""
