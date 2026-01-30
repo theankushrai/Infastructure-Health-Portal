@@ -35,19 +35,25 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 sh '''
-                    echo "Applying Kubernetes manifests..."
-                    # Added --validate=false to prevent Jenkins from intercepting the OpenAPI request;
-                    kubectl --insecure-skip-tls-verify apply -f k8s/ -R -n infra-health --validate=false
+                    echo "Detecting actual Kind Node IP..."
+                    # Get the internal Docker IP of the Kind control plane to bypass Jenkins redirect loop;
+                    KIND_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' infra-health-control-plane)
+                    echo "Kind is at: ${KIND_IP}"
+
+                    echo "Applying Kubernetes manifests via direct IP..."
+                    # Using --server override to force the connection to the cluster's internal API;
+                    kubectl --server="https://${KIND_IP}:6443" \
+                            --insecure-skip-tls-verify \
+                            apply -f k8s/ -R -n infra-health --validate=false
                     
                     echo "Restarting deployments to pick up the new images..."
-                    # Added '|| true' so the pipeline doesn't crash if these don't exist yet;
-                    kubectl --insecure-skip-tls-verify rollout restart deployment/backend -n infra-health || true
-                    kubectl --insecure-skip-tls-verify rollout restart deployment/worker -n infra-health || true
-                    kubectl --insecure-skip-tls-verify rollout restart deployment/frontend -n infra-health || true
+                    # We continue using the --server flag for all kubectl commands here;
+                    kubectl --server="https://${KIND_IP}:6443" --insecure-skip-tls-verify rollout restart deployment/backend -n infra-health || true
+                    kubectl --server="https://${KIND_IP}:6443" --insecure-skip-tls-verify rollout restart deployment/worker -n infra-health || true
+                    kubectl --server="https://${KIND_IP}:6443" --insecure-skip-tls-verify rollout restart deployment/frontend -n infra-health || true
                     
                     echo "Waiting for rollout to complete..."
-                    # Only check status for the main backend;
-                    kubectl --insecure-skip-tls-verify rollout status deployment/backend -n infra-health --timeout=60s || true
+                    kubectl --server="https://${KIND_IP}:6443" --insecure-skip-tls-verify rollout status deployment/backend -n infra-health --timeout=60s || true
                 '''
             }
         }
