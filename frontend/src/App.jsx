@@ -1,6 +1,11 @@
 import "./App.css";
 import { useState, useEffect } from "react";
 
+const API_BASE_URL = '/api'; // That's it!
+if (!API_BASE_URL) {
+  console.error("VITE_API_BASE_URL is not defined");
+}
+
 function App() {
   const [appId, setAppId] = useState("");
   const [jobs, setJobs] = useState([]);
@@ -12,12 +17,9 @@ function App() {
     }
 
     try {
-      const response = await fetch(
-        `http://127.0.0.1:8000/jobs?app_id=${appId}`,
-        {
-          method: "POST",
-        },
-      );
+      const response = await fetch(`${API_BASE_URL}/jobs?app_id=${appId}`, {
+        method: "POST",
+      });
 
       const data = await response.json();
       console.log("Job created:", data);
@@ -32,15 +34,15 @@ function App() {
     if (!appId) return;
 
     try {
-      const response = await fetch(
-        `http://127.0.0.1:8000/jobs?app_id=${appId}`,
-      );
+      const response = await fetch(`${API_BASE_URL}/jobs?app_id=${appId}`);
+
       const data = await response.json();
       setJobs(data);
     } catch (error) {
       console.error("Error fetching jobs:", error);
     }
   };
+
   useEffect(() => {
     if (!appId) return;
 

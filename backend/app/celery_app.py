@@ -1,7 +1,7 @@
 import os
 from celery import Celery
 
-MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
+MONGO_URL = os.getenv("MONGO_URL")
 
 celery_app = Celery(
     "infra_health",
